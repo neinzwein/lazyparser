@@ -1,0 +1,61 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: us_postgres
+    environment:
+      POSTGRES_DB: scraper
+      POSTGRES_USER: scraper
+      POSTGRES_PASSWORD: scraper
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scraper -d scraper"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7
+    container_name: us_redis
+    ports:
+      - "6379:6379"
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: us_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: us_api
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    ports:
+      - "8000:8000"
+
+  bot:
+    build:
+      context: ./bot
+      dockerfile: Dockerfile
+    container_name: us_bot
+    env_file: .env
+    environment:
+      TELEGRAM_PROXY: "socks5://host.docker.internal:9150"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  pg_data:
+  ollama_data:
